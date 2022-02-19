@@ -9,7 +9,7 @@ import steam
 import voluptuous as vol
 
 from homeassistant.components.sensor import PLATFORM_SCHEMA, SensorEntity
-from homeassistant.const import CONF_API_KEY
+from homeassistant.const import CONF_API_KEY, CONF_SCAN_INTERVAL
 from homeassistant.core import HomeAssistant, callback
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -38,15 +38,17 @@ STEAM_ICON_URL = (
     "https://steamcdn-a.akamaihd.net/steamcommunity/public/images/apps/%d/%s.jpg"
 )
 
+DEFAULT_INTERVAL = timedelta(minutes=1)
+
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     {
         vol.Required(CONF_API_KEY): cv.string,
         vol.Required(CONF_ACCOUNTS, default=[]): vol.All(cv.ensure_list, [cv.string]),
+        vol.Optional(CONF_SCAN_INTERVAL, default=DEFAULT_INTERVAL): cv.time_period,
     }
 )
 
 APP_LIST_KEY = "steam_online.app_list"
-BASE_INTERVAL = timedelta(minutes=1)
 
 
 def setup_platform(
@@ -56,6 +58,8 @@ def setup_platform(
     discovery_info: DiscoveryInfoType | None = None,
 ) -> None:
     """Set up the Steam platform."""
+
+    scan_interval = config[CONF_SCAN_INTERVAL]
 
     steam.api.key.set(config[CONF_API_KEY])
     # Initialize steammods app list before creating sensors
@@ -76,7 +80,7 @@ def setup_platform(
         entities[entity_next].async_schedule_update_ha_state(True)
         entity_next = (entity_next + 1) % len(entities)
 
-    track_time_interval(hass, do_update, BASE_INTERVAL)
+    track_time_interval(hass, do_update, scan_interval)
 
 
 class SteamSensor(SensorEntity):
@@ -217,6 +221,8 @@ class SteamSensor(SensorEntity):
             attr["last_online"] = self._last_online
         if self._level is not None:
             attr["level"] = self._level
+
+        attr["persona_state_flags"] = self._profile.persona_state_flags
         return attr
 
     @property
